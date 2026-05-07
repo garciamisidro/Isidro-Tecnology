@@ -100,57 +100,40 @@ if not st.session_state.datos_obra.empty:
     else:
         st.warning("Aún no hay suficiente avance para calcular una predicción.")
 
-# --- EXPORTACIÓN Y ENVÍO ---
-# Generar Excel
-nombre_archivo = "reporte_presupuesto.xlsx"
-st.session_state.datos_presupuesto.to_excel(nombre_archivo, index=False)
+import streamlit as st
+import pandas as pd
+from datetime import date
+# ... (tus otros imports de email) ...
 
-col_descarga, col_correo = st.columns(2)
+st.title("🏗️ Seguimiento de Obra")
 
-with col_descarga:
+# 1. INICIALIZAR EL ESTADO (Esto evita el error de la captura)
+if "datos_obra" not in st.session_state:
+    st.session_state.datos_obra = pd.DataFrame(columns=["Fecha", "Trabajador", "Tarea", "Estado"])
+
+# --- FORMULARIO ---
+with st.form("form_obra"):
+    trabajador = st.text_input("Nombre del Trabajador")
+    tarea = st.selectbox("Tarea", ["Tendido de cables", "Rozas", "Conexionado"]) # Pon aquí tu lista larga
+    estado = st.selectbox("Estado", ["25%", "50%", "75%", "OK"])
+    enviado = st.form_submit_button("Registrar Tarea")
+
+if enviado:
+    nuevo = {"Fecha": date.today(), "Trabajador": trabajador, "Tarea": tarea, "Estado": estado}
+    st.session_state.datos_obra = pd.concat([st.session_state.datos_obra, pd.DataFrame([nuevo])], ignore_index=True)
+    st.success("¡Tarea registrada!")
+
+# --- EXPORTACIÓN (Con el "IF" de seguridad) ---
+# Solo mostramos y descargamos si hay al menos una fila de datos
+if not st.session_state.datos_obra.empty:
+    st.dataframe(st.session_state.datos_obra)
+    
+    nombre_archivo = "reporte_obra.xlsx"
+    st.session_state.datos_obra.to_excel(nombre_archivo, index=False)
+    
     with open(nombre_archivo, "rb") as f:
         st.download_button("📥 Descargar Excel", f, file_name=nombre_archivo)
-
-with col_correo:
-    if st.button("📧 Enviar por Correo"):
-        try:
-            # 1. Recuperar credenciales de los Secrets
-            usuario = st.secrets["email"]["user"]
-            password = st.secrets["email"]["pass"]
-            profe = st.secrets["email"]["profe"]
-
-            # 2. Configurar el mensaje
-            msg = MIMEMultipart()
-            msg['From'] = usuario
-            msg['To'] = f"{profe}, {usuario}"  # Envía a ambos
-            msg['Subject'] = f"Reporte Presupuesto - {trabajador}"
-
-            # Cuerpo del mensaje
-            cuerpo = f"Se adjunta el reporte de presupuesto generado el {fecha} por {trabajador}."
-            msg.attach(MIMEText(cuerpo, 'plain'))
-
-            # 3. Adjuntar el archivo Excel
-            with open(nombre_archivo, "rb") as adjunto:
-                part = MIMEBase('application', 'octet-stream')
-                part.set_payload(adjunto.read())
-                encoders.encode_base64(part)
-                part.add_header('Content-Disposition', f"attachment; filename= {nombre_archivo}")
-                msg.attach(part)
-
-            # 4. Envío por servidor SMTP (Gmail por defecto)
-            server = smtplib.SMTP('smtp.gmail.com', 587)
-            server.starttls()
-            server.login(usuario, password)
-            server.send_message(msg)
-            server.quit()
-
-            st.success("✅ Correo enviado con éxito a la profesora y a tu cuenta.")
-        
-        except Exception as e:
-            st.error(f"❌ Error al enviar: {e}")
-            st.info("Asegúrate de haber configurado los 'Secrets' en Streamlit Cloud.")
-
-# Botón para envío por correo
-if st.button("📧 Enviar Reporte por Correo"):
-    # Aquí iría la lógica de smtplib usando st.secrets para la seguridad
-    st.info("Función de envío activada (Configurar SMTP con Secrets de Streamlit)")
+    
+    # Aquí iría tu botón de enviar correo...
+else:
+    st.info("Aún no hay registros. Rellena el formulario para generar el Excel.")
