@@ -6,23 +6,23 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
-# --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="Seguimiento de Obra", layout="centered")
 
-# 1. Incorporar logo de la empresa
-# st.image("logo_empresa.png", width=200) 
-st.title("🏗️ Sistema de Seguimiento de Obra")
+# --- 1. CONFIGURACIÓN DE PÁGINA Y ESTADO ---
+st.set_page_config(page_title="Seguimiento de Obra PRO", layout="centered")
 
-# --- FORMULARIO DE ENTRADA ---
-with st.form("formulario_obra"):
+if "datos_obra" not in st.session_state:
+    st.session_state.datos_obra = pd.DataFrame(columns=["Fecha", "Trabajador", "Tarea", "Estado"])
+
+st.title("🏗️ Seguimiento de Obra Inteligente")
+
+# --- 2. FORMULARIO DE ENTRADA ---
+with st.form("formulario_registro", clear_on_submit=True):
     col1, col2 = st.columns(2)
-    
     with col1:
         trabajador = st.text_input("Nombre del Trabajador")
-        fecha = st.date_input("Fecha de envío", date.today())
+        fecha_envio = st.date_input("Fecha de envío", date.today())
     
-    # 2. Desplegable de tareas
-    tareas = [
+    tareas_lista = [
         "Trazado y marcado de cajas, tubos y cuadros", "Ejecución rozas en paredes y techos",
         "Montaje de soportes", "Colocación tubos y conductos", "Tendido de cables",
         "Identificación y etiquetado", "Conexionado de cables en bornes o regletas",
@@ -31,36 +31,28 @@ with st.form("formulario_obra"):
         "Conexionado de sensores/actuadores de equipos domóticos/automáticos", "Pruebas de continuidad",
         "Pruebas de aislamiento", "Verificación de tierras", "Programación del automatismo", "Pruebas de funcionamiento"
     ]
-    tarea_sel = st.selectbox("Seleccione la Tarea:", tareas)
+    tarea_sel = st.selectbox("Seleccione la tarea:", tareas_lista)
     
-    # 3. Desplegable de estado
-    estados = [
+    estados_lista = [
         "Avance de la tarea en torno al 25% aprox.", "Avance de la tarea en torno al 50% aprox.",
         "Avance de la tarea en torno al 75% aprox.", "OK, finalizado sin errores",
         "Finalizado, pero con errores pendientes de corregir", "Finalizado y corregidos los errores"
     ]
-    estado_sel = st.selectbox("Estado de la tarea:", estados)
+    estado_sel = st.selectbox("Estado de la tarea:", estados_lista)
     
-    enviado = st.form_submit_button("Registrar Datos")
+    boton_registro = st.form_submit_button("Registrar Informe")
 
-# --- GESTIÓN DE DATOS (Pandas) ---
-if "datos_obra" not in st.session_state:
-    st.session_state.datos_obra = pd.DataFrame(columns=["Fecha", "Trabajador", "Tarea", "Estado"])
-
-if enviado:
-    nuevo_registro = {"Fecha": fecha, "Trabajador": trabajador, "Tarea": tarea_sel, "Estado": estado_sel}
+if boton_registro and trabajador:
+    nuevo_registro = {"Fecha": fecha_envio, "Trabajador": trabajador, "Tarea": tarea_sel, "Estado": estado_sel}
     st.session_state.datos_obra = pd.concat([st.session_state.datos_obra, pd.DataFrame([nuevo_registro])], ignore_index=True)
-    st.success("Registro añadido localmente.")
+    st.success("✅ Registro añadido.")
 
-# Mostrar tabla actual
-st.dataframe(st.session_state.datos_obra)
-
-# --- ANÁLISIS DE DATOS Y PREDICCIÓN ---
+# --- 3. DASHBOARD Y PREDICCIÓN (RA3 + RA4) ---
 if not st.session_state.datos_obra.empty:
     st.divider()
-    st.subheader("📊 Panel de Control e IA de Seguimiento")
+    st.subheader("📊 Análisis de Progreso y Predicción")
 
-    # 1. Mapeo de estados a valores numéricos para cálculo
+    # Mapeo para cálculos
     valor_estado = {
         "Avance de la tarea en torno al 25% aprox.": 25,
         "Avance de la tarea en torno al 50% aprox.": 50,
@@ -70,70 +62,56 @@ if not st.session_state.datos_obra.empty:
         "Finalizado y corregidos los errores": 100
     }
 
-    # Calculamos el progreso medio de todas las tareas registradas
-    progreso_total = st.session_state.datos_obra["Estado"].map(valor_estado).mean()
+    # Cálculo de progreso
+    progreso_medio = st.session_state.datos_obra["Estado"].map(valor_estado).mean()
+    st.write(f"**Progreso total de la obra:** {progreso_medio:.1f}%")
+    st.progress(progreso_medio / 100)
 
-    # 2. Barra de carga visual
-    st.write(f"**Progreso acumulado de la obra:** {progreso_total:.1f}%")
-    st.progress(progreso_total / 100)
-
-    # 3. Cálculo de Predicción de Finalización (IA Sencilla)
-    # Suponemos que cada 1% de progreso toma un tiempo determinado desde la fecha inicial
+    # Lógica Predictiva (IA Sencilla)
     fecha_inicio = pd.to_datetime(st.session_state.datos_obra["Fecha"]).min().date()
-    hoy = date.today()
-    dias_transcurridos = (hoy - fecha_inicio).days + 1 # +1 para evitar división por cero
-
-    if progreso_total > 0:
-        # Velocidad actual: % por día
-        velocidad = progreso_total / dias_transcurridos
-        # Días restantes para llegar al 100%
-        dias_restantes = (100 - progreso_total) / velocidad
+    dias_transcurridos = (date.today() - fecha_inicio).days + 1
+    
+    if progreso_medio > 0:
+        velocidad = progreso_medio / dias_transcurridos
+        dias_restantes = (100 - progreso_medio) / velocidad
+        fecha_fin = date.today() + pd.Timedelta(days=int(dias_restantes))
         
-        fecha_estimada = hoy + pd.Timedelta(days=int(dias_restantes))
-        
-        # Mostrar métricas
-        col_m1, col_m2 = st.columns(2)
-        col_m1.metric("Días trabajados", dias_transcurridos)
-        col_m2.metric("Fecha fin estimada", fecha_estimada.strftime("%d/%m/%Y"))
-        
-        st.info(f"💡 **Análisis Predictivo:** Al ritmo actual ({velocidad:.1f}% diario), la obra finalizará aproximadamente el {fecha_estimada.strftime('%d de %B de %Y')}.")
-    else:
-        st.warning("Aún no hay suficiente avance para calcular una predicción.")
+        c1, c2 = st.columns(2)
+        c1.metric("Días trabajados", dias_transcurridos)
+        c2.metric("Fecha estimada de fin", fecha_fin.strftime("%d/%m/%Y"))
+        st.info(f"💡 Al ritmo actual ({velocidad:.1f}% diario), se estima terminar el {fecha_fin.strftime('%d/%m/%Y')}.")
 
-import streamlit as st
-import pandas as pd
-from datetime import date
-# ... (tus otros imports de email) ...
-
-st.title("🏗️ Seguimiento de Obra")
-
-# 1. INICIALIZAR EL ESTADO (Esto evita el error de la captura)
-if "datos_obra" not in st.session_state:
-    st.session_state.datos_obra = pd.DataFrame(columns=["Fecha", "Trabajador", "Tarea", "Estado"])
-
-# --- FORMULARIO ---
-with st.form("form_obra"):
-    trabajador = st.text_input("Nombre del Trabajador")
-    tarea = st.selectbox("Tarea", ["Tendido de cables", "Rozas", "Conexionado"]) # Pon aquí tu lista larga
-    estado = st.selectbox("Estado", ["25%", "50%", "75%", "OK"])
-    enviado = st.form_submit_button("Registrar Tarea")
-
-if enviado:
-    nuevo = {"Fecha": date.today(), "Trabajador": trabajador, "Tarea": tarea, "Estado": estado}
-    st.session_state.datos_obra = pd.concat([st.session_state.datos_obra, pd.DataFrame([nuevo])], ignore_index=True)
-    st.success("¡Tarea registrada!")
-
-# --- EXPORTACIÓN (Con el "IF" de seguridad) ---
-# Solo mostramos y descargamos si hay al menos una fila de datos
-if not st.session_state.datos_obra.empty:
+    # --- 4. EXPORTACIÓN Y ENVÍO ---
+    st.divider()
     st.dataframe(st.session_state.datos_obra)
     
     nombre_archivo = "reporte_obra.xlsx"
     st.session_state.datos_obra.to_excel(nombre_archivo, index=False)
-    
-    with open(nombre_archivo, "rb") as f:
-        st.download_button("📥 Descargar Excel", f, file_name=nombre_archivo)
-    
-    # Aquí iría tu botón de enviar correo...
+
+    col_b1, col_b2 = st.columns(2)
+    with col_b1:
+        with open(nombre_archivo, "rb") as f:
+            st.download_button("📥 Descargar Excel", f, file_name=nombre_archivo)
+    with col_b2:
+        if st.button("📧 Enviar por Correo"):
+            try:
+                u, p, prof = st.secrets["email"]["user"], st.secrets["email"]["pass"], st.secrets["email"]["profe"]
+                msg = MIMEMultipart()
+                msg['From'], msg['To'], msg['Subject'] = u, f"{prof}, {u}", "Reporte Obra Actualizado"
+                msg.attach(MIMEText("Se adjunta el seguimiento de obra.", 'plain'))
+                with open(nombre_archivo, "rb") as a:
+                    part = MIMEBase('application', 'octet-stream')
+                    part.set_payload(a.read())
+                    encoders.encode_base64(part)
+                    part.add_header('Content-Disposition', f"attachment; filename={nombre_archivo}")
+                    msg.attach(part)
+                s = smtplib.SMTP('smtp.gmail.com', 587)
+                s.starttls()
+                s.login(u, p)
+                s.send_message(msg)
+                s.quit()
+                st.success("✅ Enviado correctamente.")
+            except Exception as e:
+                st.error(f"Error: {e}")
 else:
-    st.info("Aún no hay registros. Rellena el formulario para generar el Excel.")
+    st.info("👋 Registra una tarea para ver el análisis de progreso y predicción.")
