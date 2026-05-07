@@ -102,11 +102,53 @@ if not st.session_state.datos_obra.empty:
 
 # --- EXPORTACIÓN Y ENVÍO ---
 # Generar Excel
-nombre_archivo = "reporte_obra.xlsx"
-st.session_state.datos_obra.to_excel(nombre_archivo, index=False)
+nombre_archivo = "reporte_presupuesto.xlsx"
+st.session_state.datos_presupuesto.to_excel(nombre_archivo, index=False)
 
-with open(nombre_archivo, "rb") as f:
-    st.download_button("📥 Descargar Excel", f, file_name=nombre_archivo)
+col_descarga, col_correo = st.columns(2)
+
+with col_descarga:
+    with open(nombre_archivo, "rb") as f:
+        st.download_button("📥 Descargar Excel", f, file_name=nombre_archivo)
+
+with col_correo:
+    if st.button("📧 Enviar por Correo"):
+        try:
+            # 1. Recuperar credenciales de los Secrets
+            usuario = st.secrets["email"]["user"]
+            password = st.secrets["email"]["pass"]
+            profe = st.secrets["email"]["profe"]
+
+            # 2. Configurar el mensaje
+            msg = MIMEMultipart()
+            msg['From'] = usuario
+            msg['To'] = f"{profe}, {usuario}"  # Envía a ambos
+            msg['Subject'] = f"Reporte Presupuesto - {trabajador}"
+
+            # Cuerpo del mensaje
+            cuerpo = f"Se adjunta el reporte de presupuesto generado el {fecha} por {trabajador}."
+            msg.attach(MIMEText(cuerpo, 'plain'))
+
+            # 3. Adjuntar el archivo Excel
+            with open(nombre_archivo, "rb") as adjunto:
+                part = MIMEBase('application', 'octet-stream')
+                part.set_payload(adjunto.read())
+                encoders.encode_base64(part)
+                part.add_header('Content-Disposition', f"attachment; filename= {nombre_archivo}")
+                msg.attach(part)
+
+            # 4. Envío por servidor SMTP (Gmail por defecto)
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(usuario, password)
+            server.send_message(msg)
+            server.quit()
+
+            st.success("✅ Correo enviado con éxito a la profesora y a tu cuenta.")
+        
+        except Exception as e:
+            st.error(f"❌ Error al enviar: {e}")
+            st.info("Asegúrate de haber configurado los 'Secrets' en Streamlit Cloud.")
 
 # Botón para envío por correo
 if st.button("📧 Enviar Reporte por Correo"):
