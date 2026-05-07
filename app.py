@@ -2,10 +2,10 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 import smtplib
+from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
-
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Seguimiento de Obra", layout="centered")
 
