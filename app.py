@@ -55,6 +55,51 @@ if enviado:
 # Mostrar tabla actual
 st.dataframe(st.session_state.datos_obra)
 
+# --- ANÁLISIS DE DATOS Y PREDICCIÓN ---
+if not st.session_state.datos_obra.empty:
+    st.divider()
+    st.subheader("📊 Panel de Control e IA de Seguimiento")
+
+    # 1. Mapeo de estados a valores numéricos para cálculo
+    valor_estado = {
+        "Avance de la tarea en torno al 25% aprox.": 25,
+        "Avance de la tarea en torno al 50% aprox.": 50,
+        "Avance de la tarea en torno al 75% aprox.": 75,
+        "OK, finalizado sin errores": 100,
+        "Finalizado, pero con errores pendientes de corregir": 90,
+        "Finalizado y corregidos los errores": 100
+    }
+
+    # Calculamos el progreso medio de todas las tareas registradas
+    progreso_total = st.session_state.datos_obra["Estado"].map(valor_estado).mean()
+
+    # 2. Barra de carga visual
+    st.write(f"**Progreso acumulado de la obra:** {progreso_total:.1f}%")
+    st.progress(progreso_total / 100)
+
+    # 3. Cálculo de Predicción de Finalización (IA Sencilla)
+    # Suponemos que cada 1% de progreso toma un tiempo determinado desde la fecha inicial
+    fecha_inicio = pd.to_datetime(st.session_state.datos_obra["Fecha"]).min().date()
+    hoy = date.today()
+    dias_transcurridos = (hoy - fecha_inicio).days + 1 # +1 para evitar división por cero
+
+    if progreso_total > 0:
+        # Velocidad actual: % por día
+        velocidad = progreso_total / dias_transcurridos
+        # Días restantes para llegar al 100%
+        dias_restantes = (100 - progreso_total) / velocidad
+        
+        fecha_estimada = hoy + pd.Timedelta(days=int(dias_restantes))
+        
+        # Mostrar métricas
+        col_m1, col_m2 = st.columns(2)
+        col_m1.metric("Días trabajados", dias_transcurridos)
+        col_m2.metric("Fecha fin estimada", fecha_estimada.strftime("%d/%m/%Y"))
+        
+        st.info(f"💡 **Análisis Predictivo:** Al ritmo actual ({velocidad:.1f}% diario), la obra finalizará aproximadamente el {fecha_estimada.strftime('%d de %B de %Y')}.")
+    else:
+        st.warning("Aún no hay suficiente avance para calcular una predicción.")
+
 # --- EXPORTACIÓN Y ENVÍO ---
 # Generar Excel
 nombre_archivo = "reporte_obra.xlsx"
